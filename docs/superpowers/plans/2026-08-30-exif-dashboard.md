@@ -6,13 +6,13 @@
 
 **Architecture:** `scan` validates a user-supplied directory list, walks it, batch-extracts EXIF via a pinned read-only exiftool invocation, dedups RAW+JPEG pairs into "shots", and atomically writes JSONL. `render` reads the JSONL and emits one HTML file with all data/CSS/JS inline; charts are hand-rolled SVG re-rendered client-side on filter changes.
 
-**Tech Stack:** Python ≥3.13 (stdlib only), uv, exiftool (external binary), pytest (dev), vanilla JS/SVG.
+**Tech Stack:** Python ≥3.10 (stdlib only; dev interpreter uv-pinned), uv, exiftool (external binary), pytest (dev), vanilla JS/SVG.
 
 **Spec:** `docs/superpowers/specs/2026-08-30-exif-dashboard-design.md` — read it before implementing any task; it is the authority on every rule referenced below.
 
 ## Global Constraints
 
-- Python ≥3.13; package code uses **stdlib only** (pytest is a dev dependency; nothing else).
+- `requires-python = ">=3.10"` — no 3.11+-only APIs in package code (the dev interpreter is uv-pinned to 3.13 via `.python-version`, but that is a convenience, not a requirement). Package code uses **stdlib only** (pytest is a dev dependency; nothing else).
 - `exiftool` is the only external binary; missing → clear install-hint error.
 - **The scan is read-only.** No exiftool write-mode options ever (`=` assignments, `-overwrite_original`, `-delete_original`, `-restore_original`, `-tagsFromFile`). Argfiles: absolute paths only, system temp dir only.
 - All file outputs are atomic: `<name>.tmp.<pid>` in the destination dir, rename on success, delete on failure.
@@ -439,7 +439,7 @@ def discover_files(roots: list[Path]) -> DiscoveryResult:
                 if name.startswith(".") or full.suffix.lower().lstrip(".") not in IMAGE_EXTS:
                     result.skipped += 1
                     continue
-                if not full.is_file(follow_symlinks=False):
+                if full.is_symlink() or not full.is_file():
                     continue  # symlinks and other non-regular files: reads must not escape roots
                 if not _is_safe_name(str(full)):
                     result.unsafe_names.append(repr(str(full)))

@@ -36,7 +36,10 @@ touches.
 
 ## Architecture
 
-One Python package (`exif_dashboard`), Python ≥3.13, managed by uv.
+One Python package (`exif_dashboard`), managed by uv. `requires-python`
+stays permissive (≥3.10, no modern-only APIs); the dev interpreter is
+pinned via uv's `.python-version` for stability, not as a stack
+requirement.
 Two subcommands:
 
 ```
