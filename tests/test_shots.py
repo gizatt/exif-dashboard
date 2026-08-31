@@ -51,10 +51,12 @@ def test_derivative_names():
 
 
 def test_lens_tag_priority_is_fixed():
-    meta = {str(ROOT / "a/x.jpg"): {"Lens": "third", "LensID": "second", "LensModel": "first"}}
+    meta = {str(ROOT / "a/x.jpg"): {"Lens": "third", "LensModel": "second", "LensID": "first"}}
     assert build_shots([ff("a/x.jpg")], meta)[0]["lens"] == "first"
-    meta2 = {str(ROOT / "a/x.jpg"): {"Lens": "third", "LensID": "second"}}
+    meta2 = {str(ROOT / "a/x.jpg"): {"Lens": "third", "LensModel": "second"}}
     assert build_shots([ff("a/x.jpg")], meta2)[0]["lens"] == "second"
+    meta3 = {str(ROOT / "a/x.jpg"): {"Lens": "third"}}
+    assert build_shots([ff("a/x.jpg")], meta3)[0]["lens"] == "third"
 
 
 def test_missing_and_zero_values_become_null():

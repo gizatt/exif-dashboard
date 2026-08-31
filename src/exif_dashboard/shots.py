@@ -12,7 +12,11 @@ from pathlib import Path
 from exif_dashboard.discovery import RAW_EXTS, FoundFile
 
 DERIVATIVE_RE = re.compile(r"(-Edit(-\d+)?|-HDR|-Pano| \(\d+\))$")
-LENS_TAGS = ("LensModel", "LensID", "Lens")  # fixed priority — never per-file opportunistic
+# Fixed priority — never per-file opportunistic. LensID first: it is
+# exiftool's decoded MakerNotes composite and stays identical between a
+# camera original and a Lightroom export of the same shot, while
+# Lightroom writes a generic LensModel that would split the bucket.
+LENS_TAGS = ("LensID", "LensModel", "Lens")
 DATETIME_TAGS = ("DateTimeOriginal", "CreateDate")
 _DT_RE = re.compile(r"^(\d{4}):(\d{2})")
 

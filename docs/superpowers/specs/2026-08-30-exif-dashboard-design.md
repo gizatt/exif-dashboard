@@ -136,7 +136,7 @@ Fields captured per shot:
 | `scan_root`       | the root from dirs.txt containing the file  |
 | `camera_make`     | Make                                        |
 | `camera_model`    | Model                                       |
-| `lens`            | LensModel, LensID, Lens                     |
+| `lens`            | LensID, LensModel, Lens                     |
 | `focal_length`    | FocalLength (numeric mm)                    |
 | `focal_length_35` | FocalLengthIn35mmFormat (numeric mm)        |
 | `aperture`        | FNumber                                     |
@@ -156,9 +156,13 @@ absent from the allowlist).
 
 **Lens strings are used verbatim: one string = one bucket.** No
 normalization, aliasing, or fuzzy matching. The tag priority order
-(LensModel → LensID → Lens) is fixed and applied uniformly to every
+(LensID → LensModel → Lens) is fixed and applied uniformly to every
 file, so a given lens doesn't split buckets by which tags a body
-wrote. Near-duplicate buckets are the user's to eyeball.
+wrote. LensID leads because it is exiftool's decoded MakerNotes
+composite and stays identical between a camera original and a
+Lightroom export of the same shot, where Lightroom's generic
+LensModel string would split the bucket (verified on real files
+2026-08-30). Near-duplicate buckets are the user's to eyeball.
 
 **Datetime parsing:** only the fixed `YYYY:MM` prefix of
 DateTimeOriginal/CreateDate is parsed (charts need year+month);
