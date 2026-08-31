@@ -1,6 +1,6 @@
 # EXIF Dashboard
 
-Analyze camera/lens/focal-length usage across a photo collection. The `scan` command extracts EXIF from your photos into a JSON artifact; `render` produces a fully self-contained HTML dashboard with interactive filters and charts.
+Analyze camera/lens/focal-length usage across a photo collection. The `scan` command extracts EXIF from your photos into a JSONL artifact; `render` produces a fully self-contained HTML dashboard with interactive filters and charts.
 
 ## Setup
 
