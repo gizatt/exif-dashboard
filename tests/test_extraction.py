@@ -29,13 +29,13 @@ def test_allowlist_has_no_gps_or_serial():
 
 def test_argfile_absolute_paths_only(tmp_path):
     argfile = tmp_path / "x.args"
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         write_argfile([Path("relative.jpg")], argfile)
 
 
 def test_argfile_rejects_newline_paths(tmp_path):
     argfile = tmp_path / "x.args"
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         write_argfile([Path("/a/bad\nname.jpg")], argfile)
 
 

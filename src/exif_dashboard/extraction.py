@@ -50,8 +50,10 @@ def write_argfile(paths: list[Path], argfile: Path) -> None:
         s = str(p)
         # Belt-and-braces: discovery already filtered these, but a relative
         # or newline-bearing path in an argfile can become an exiftool OPTION.
-        assert p.is_absolute(), f"argfile paths must be absolute: {s}"
-        assert "\n" not in s and "\r" not in s, f"unsafe path reached argfile: {s!r}"
+        if not p.is_absolute():
+            raise ValueError(f"argfile paths must be absolute: {s}")
+        if "\n" in s or "\r" in s:
+            raise ValueError(f"unsafe path reached argfile: {s!r}")
         lines.append(s)
     argfile.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
