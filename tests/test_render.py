@@ -63,6 +63,30 @@ def test_render_refuses_output_equals_input(tmp_path):
         render_dashboard(art, art)
 
 
+def test_scan_root_not_embedded_in_html(tmp_path):
+    rows = sample_rows()
+    rows[0]["scan_root"] = "/secret/location/photos"
+    art = tmp_path / "p.jsonl"
+    write_artifact(rows, {"scanned_at": "t", "tool_version": "v"}, art)
+    out = tmp_path / "dash.html"
+    render_dashboard(art, out)
+    html = out.read_text(encoding="utf-8")
+    assert "/secret/location/photos" not in html
+    payload = extract_payload(html)
+    shot = payload["shots"][0]
+    assert "scan_root" not in shot
+    assert shot["path"] == "trip/DSC_1.jpg"
+    assert shot["lens"] == "Evil</script><b>lens"
+    assert shot["camera_make"] == "Nikon"
+
+
+def test_render_to_missing_output_dir_raises_cleanly(tmp_path):
+    art = tmp_path / "p.jsonl"
+    write_artifact(sample_rows(), {"scanned_at": "t", "tool_version": "v"}, art)
+    with pytest.raises(RenderError, match="output directory does not exist"):
+        render_dashboard(art, tmp_path / "typo_dir" / "dash.html")
+
+
 def test_dashboard_assets_are_nonempty_and_wired(tmp_path):
     art = tmp_path / "p.jsonl"
     write_artifact(sample_rows(), {"scanned_at": "t", "tool_version": "v"}, art)

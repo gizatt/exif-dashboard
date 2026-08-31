@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "scan":
             return cmd_scan(args.dirs_file, args.output)
         return cmd_render(args.artifact, args.output)
-    except ToolError as e:
+    except (ToolError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 

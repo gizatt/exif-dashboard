@@ -58,6 +58,15 @@ def test_output_equals_input_rejected(tmp_path):
         validate_output_path(f, [], f)
 
 
+def test_output_parent_dir_missing_rejected(tmp_path):
+    root = tmp_path / "photos"
+    root.mkdir()
+    with pytest.raises(DiscoveryError, match="output directory does not exist"):
+        validate_output_path(
+            tmp_path / "typo_dir" / "out.jsonl", [root.resolve()], tmp_path / "dirs.txt"
+        )
+
+
 def test_valid_output_accepted(tmp_path):
     root = tmp_path / "photos"
     root.mkdir()

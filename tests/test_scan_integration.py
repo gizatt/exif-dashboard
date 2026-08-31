@@ -5,6 +5,7 @@ from exif_dashboard.artifact import read_artifact
 from exif_dashboard.cli import main
 from exif_dashboard.shots import ROW_KEYS
 from fixture_tree import make_fixture_tree  # pytest prepends tests/ to sys.path
+from test_render import extract_payload
 
 pytestmark = pytest.mark.skipif(shutil.which("exiftool") is None, reason="exiftool not installed")
 
@@ -52,3 +53,28 @@ def test_all_rows_have_exact_keys(scanned):
 def test_meta_header(scanned):
     meta, _ = scanned
     assert set(meta.keys()) == {"scanned_at", "tool_version"}
+
+
+def test_scan_then_render_roundtrip(tmp_path):
+    # Spec Testing section: scan fixture tree -> render -> parse the embedded
+    # JSON back out of the HTML -> assert expected aggregate counts.
+    root = make_fixture_tree()
+    dirs_file = tmp_path / "dirs.txt"
+    dirs_file.write_text(f"{root}\n", encoding="utf-8")
+    artifact = tmp_path / "photos.jsonl"
+    assert main(["scan", str(dirs_file), "-o", str(artifact)]) == 0
+
+    html_out = tmp_path / "dash.html"
+    assert main(["render", str(artifact), "-o", str(html_out)]) == 0
+
+    html = html_out.read_text(encoding="utf-8")
+    payload = extract_payload(html)
+    shots = payload["shots"]
+
+    assert len(shots) == 4
+    assert sum(s["is_derivative"] for s in shots) == 1
+
+    lenses = {s["lens"] for s in shots if s["lens"]}
+    assert "Lens</script>50mm" in lenses
+
+    assert all("scan_root" not in s for s in shots)

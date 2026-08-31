@@ -49,6 +49,8 @@ def validate_output_path(output: Path, roots: list[Path], input_file: Path) -> N
     for r in roots:
         if out.is_relative_to(r):
             raise DiscoveryError(f"output path {out} is inside scan root {r}")
+    if not out.parent.is_dir():
+        raise DiscoveryError(f"output directory does not exist: {out.parent}")
 
 
 RAW_EXTS = ("nef", "cr2", "cr3", "arw", "raf", "dng", "orf", "rw2")

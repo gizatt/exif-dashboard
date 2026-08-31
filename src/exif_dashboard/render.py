@@ -22,11 +22,17 @@ def embed_json(data) -> str:
 def render_dashboard(artifact: Path, output: Path) -> None:
     if artifact.resolve() == output.resolve():
         raise RenderError("output path equals input path — refusing to clobber the artifact")
+    if not output.resolve().parent.is_dir():
+        raise RenderError(f"output directory does not exist: {output.resolve().parent}")
     meta, rows = read_artifact(artifact)
+    # scan_root is an absolute local filesystem path and must never reach the
+    # shareable dashboard HTML (spec: Render subcommand — no absolute paths
+    # embedded). `path` is already stored relative to scan_root, so it stays.
+    payload_rows = [{k: v for k, v in row.items() if k != "scan_root"} for row in rows]
     static = resource_files("exif_dashboard") / "static"
     html = (static / "template.html").read_text(encoding="utf-8")
     html = html.replace("/*__CSS__*/", (static / "dashboard.css").read_text(encoding="utf-8"))
     html = html.replace("/*__JS__*/", (static / "dashboard.js").read_text(encoding="utf-8"))
-    html = html.replace("__PAYLOAD__", embed_json({"meta": meta, "shots": rows}))
+    html = html.replace("__PAYLOAD__", embed_json({"meta": meta, "shots": payload_rows}))
     with atomic_output(output) as f:
         f.write(html)
