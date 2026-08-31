@@ -1,7 +1,8 @@
 # exif-dashboard — Design Spec
 
 Date: 2026-08-30
-Status: Draft for review
+Status: Draft for review (rev 2 — incorporates adversarial simplicity
+and safety reviews)
 
 ## Purpose
 
@@ -23,7 +24,9 @@ touches.
    an artifact file.
 3. **The scan is read-only.** It must never write, rename, or modify
    anything inside the scanned directories. All output goes to the
-   user-specified output path.
+   user-specified output path, which is refused if it resolves to a
+   location inside any scanned root. (Mount-level atime updates from
+   reading are unavoidable and not a violation.)
 4. **The dashboard is a single self-contained HTML file.** No server,
    no CDN, no network access; it opens from disk and works forever.
 
@@ -50,90 +53,160 @@ if absent. The Python package itself uses stdlib only.
 
 ### Input
 
-A text file, one directory per line. Blank lines and `#` comments
-ignored. Each listed directory must exist; missing ones are reported
-and the scan aborts before any work (fail fast rather than silently
-scanning a partial set).
+A text file, one directory per line. Blank lines and `#`-prefixed
+comment lines ignored (limitation, documented: a root whose name
+starts with `#` cannot be listed). Validation happens fail-fast,
+before any scanning:
+
+- Every listed directory must exist.
+- After `realpath` resolution: duplicate roots and nested roots
+  (one root inside another) are rejected — they would double-count
+  shots and make `top_folder` order-dependent.
+- The resolved `-o` output path must not lie inside any resolved
+  scan root (core constraint 3).
+- Resolved output path must not equal the input file path.
 
 ### File discovery
 
-Recursive walk of each listed directory. Files are included by
-extension (case-insensitive):
+Recursive walk of each listed directory. Symlinked directories are
+not followed, and non-regular files (including symlinked files) are
+skipped, so reads never escape the listed roots. Files are included
+by extension (case-insensitive):
 
 - RAW: `nef cr2 cr3 arw raf dng orf rw2`
 - Non-RAW image: `jpg jpeg heic heif tif tiff png`
 
 Everything else (videos, `.xmp`, `.thm`, hidden files) is skipped.
-Symlinks are not followed (loop and escape protection).
+
+Paths containing `\n` or `\r`, and paths that cannot be encoded as
+UTF-8 (surrogates from undecodable filesystem bytes), are skipped
+and reported as unsafe-name errors rather than scanned — see
+argfile hardening below. (Expected count on a real photo tree: zero.)
 
 ### Metadata extraction
 
-exiftool runs in batch JSON mode, reading its file list from a
-temporary argfile (`exiftool -json -@ argfile`) in chunks (~1000
-files per invocation) to bound memory and give progress output.
-Extraction failures on individual files are counted and listed in the
-summary, never fatal.
+exiftool runs in batch JSON mode with an **explicit tag allowlist**
+(only the tags in the field table below are requested), reading its
+file list from an argfile. The exact invocation is pinned:
 
-Fields captured per file (exiftool tag → JSONL key):
+```
+exiftool -json -Make -Model -LensModel -LensID -Lens \
+  -FocalLength# -FocalLengthIn35mmFormat# -FNumber -ExposureTime \
+  -ISO -DateTimeOriginal -CreateDate -@ <argfile>
+```
 
-| JSONL key         | Source tags (first present wins)          |
-|-------------------|-------------------------------------------|
-| `path`            | SourceFile                                 |
-| `camera_make`     | Make                                       |
-| `camera_model`    | Model                                      |
-| `lens`            | LensModel, LensID, Lens                    |
-| `focal_length`    | FocalLength (numeric mm)                   |
-| `focal_length_35` | FocalLengthIn35mmFormat (numeric mm)       |
-| `aperture`        | FNumber                                    |
-| `shutter`         | ExposureTime                               |
-| `iso`             | ISO                                        |
-| `datetime`        | DateTimeOriginal, CreateDate               |
-| `width`,`height`  | ImageWidth, ImageHeight                    |
-| `file_type`       | FileType                                   |
+**Argfile hardening (safety-critical).** exiftool's argfile format
+treats lines starting with `-` as options and `#` as comments, so a
+hostile-or-unlucky filename could otherwise inject a *write*
+operation. Invariants, each enforced in code and covered by a unit
+test asserting the exact constructed argv and argfile contents:
 
-Missing values are stored as `null` and rendered as "Unknown" buckets
-downstream — rows are never dropped for missing metadata. Values like
-0mm focal length (manual lenses) map to "Unknown" at render time.
+- Argfile contains **absolute paths only** (kills leading-`-`/`#`
+  interpretation).
+- Paths containing newline/carriage-return characters were already
+  rejected at discovery (kills line-splitting injection).
+- The argfile lives in the **system temp directory**, never in a
+  scan root or the CWD.
+- No write-mode options ever appear in any exiftool argv: no `=`
+  assignments, `-overwrite_original`, `-delete_original`,
+  `-restore_original`, `-tagsFromFile`.
+
+Files are processed in chunks of ~1000 per exiftool invocation — not
+for memory (the tag allowlist keeps output small) but for **progress
+reporting and stall detection**: each chunk gets a generous
+wall-clock timeout (minutes); on timeout the child is killed and the
+scan aborts with a "mount unresponsive" error. The previous artifact
+survives (atomic write, below).
+
+Per-file extraction failures are counted and listed in the summary,
+never fatal.
+
+Fields captured per shot:
+
+| JSONL key         | Source tags (fixed priority, first present) |
+|-------------------|---------------------------------------------|
+| `path`            | SourceFile, stored **relative to scan_root** (privacy: no username/drive layout in the artifact) |
+| `scan_root`       | the root from dirs.txt containing the file  |
+| `camera_make`     | Make                                        |
+| `camera_model`    | Model                                       |
+| `lens`            | LensModel, LensID, Lens                     |
+| `focal_length`    | FocalLength (numeric mm)                    |
+| `focal_length_35` | FocalLengthIn35mmFormat (numeric mm)        |
+| `aperture`        | FNumber                                     |
+| `shutter`         | ExposureTime                                |
+| `iso`             | ISO                                         |
+| `datetime`        | DateTimeOriginal, CreateDate                |
+| `extensions`      | from dedup (which files formed this shot)   |
+
+Rationale for aperture/shutter/iso despite no v1 chart: capture is
+free, and avoiding a future rescan of the precious drive is worth
+three columns. Width/height/file_type were cut (no consumer).
+
+A regression test asserts each JSONL row's keys are exactly this
+set — a guard against capture-everything drift (and against GPS or
+serial-number tags ever entering the artifact; they are deliberately
+absent from the allowlist).
+
+**Lens strings are used verbatim: one string = one bucket.** No
+normalization, aliasing, or fuzzy matching. The tag priority order
+(LensModel → LensID → Lens) is fixed and applied uniformly to every
+file, so a given lens doesn't split buckets by which tags a body
+wrote. Near-duplicate buckets are the user's to eyeball.
+
+**Datetime parsing:** only the fixed `YYYY:MM` prefix of
+DateTimeOriginal/CreateDate is parsed (charts need year+month);
+anything unparseable (e.g. `0000:00:00 ...`) becomes null →
+"Unknown". No date libraries.
+
+Missing values are stored as `null` and rendered as "Unknown"
+buckets downstream — rows are never dropped for missing metadata.
+0mm focal length (manual lenses) maps to "Unknown" at render time.
 
 ### Dedup: files → shots
 
 - Group key: `(containing directory, basename without extension)`.
   `DSC_1234.NEF` + `DSC_1234.JPG` in the same folder are one shot.
 - When a group has both RAW and non-RAW, the RAW file's metadata is
-  canonical. The shot records `extensions: ["NEF","JPG"]`.
+  canonical. Two RAW files in one group (e.g. NEF + DNG): canonical
+  is the first by the RAW extension list order above.
 - Basename collisions in *different* directories remain separate
   shots (camera counter resets are expected).
-- Derivative detection: basenames matching `-Edit`, `-Edit-N`,
-  ` (N)`, or `-HDR`/`-Pano` suffixes relative to a sibling original
-  set `is_derivative: true`. They are kept in the artifact; the
-  dashboard excludes them by default with a toggle.
+- **Derivative detection is by basename suffix pattern alone** —
+  `-Edit`, `-Edit-N`, ` (N)`, `-HDR`, `-Pano` — no sibling-original
+  lookup. A file so named is a derivative whether or not its
+  original still exists. Sets `is_derivative: true`; kept in the
+  artifact, **always excluded from charts** (the dashboard shows the
+  excluded count in a footnote — no toggle; derivatives share the
+  original's EXIF, so including them only double-counts).
 
 ### Derived fields
 
-- `top_folder`: the first path component of the file relative to the
-  scanned root directory it was found under (the user's
-  organizational folder name). If the file sits directly in the
-  scanned root — i.e. the user listed organizational folders
-  themselves in dirs.txt — the basename of the scan root is used
-  instead, so both listing styles yield sensible folder names.
-- `scan_root`: the root from dirs.txt that contained the file.
+- `top_folder`: the first path component of the file relative to its
+  scan root (the user's organizational folder name). If the file
+  sits directly in the scan root — i.e. the user listed
+  organizational folders themselves in dirs.txt — the basename of
+  the scan root is used instead, so both listing styles yield
+  sensible folder names.
 
 ### Output
 
-JSONL: one JSON object per shot, UTF-8, written to the `-o` path.
-First line is a header object: `{"_meta": {"scanned_at": ...,
-"tool_version": ..., "roots": [...], "files_seen": N,
-"shots": N, "errors": N}}`.
+JSONL, UTF-8, one JSON object per shot, written to the `-o` path.
+First line is a small header object:
+`{"_meta": {"scanned_at": ..., "tool_version": ...}}` (displayed in
+the dashboard header). Scan counts live in the printed summary only,
+not the header, so the file is written strictly front-to-back.
 
-Writes go to a temporary file in the destination directory, renamed
-into place on success — a failed scan never truncates a previous
-artifact.
+Atomic write: output goes to a recognizably-named temp file
+(`<name>.tmp.<pid>`) in the destination directory, renamed into
+place on success and deleted on failure — a failed scan never
+truncates a previous artifact. (No fsync-before-rename: accepted
+risk for a regenerable artifact on a personal tool.)
 
 ### Summary output
 
-Printed at end of scan: files seen, files skipped by extension, shots
-after dedup, RAW+JPEG pairs merged, derivatives flagged, extraction
-errors (with paths).
+Printed at end of scan: files seen, files skipped by extension,
+unsafe-name skips, shots after dedup, RAW+JPEG pairs merged,
+derivatives flagged, extraction errors (with paths).
 
 ## Render subcommand
 
@@ -141,20 +214,37 @@ Reads the JSONL, emits one self-contained HTML file. All data
 embedded as a JSON blob; all CSS/JS inline; no external requests of
 any kind. Target size: a few MB for 20k shots.
 
+Safety mirrors the scan side:
+
+- Refuses to run when resolved output path equals resolved input
+  path (protects the artifact from a tab-completion slip like
+  `render photos.jsonl -o photos.jsonl`).
+- Same temp-file + rename atomic write for the HTML.
+- The embedded JSON blob escapes `</` (as `<\/`) so EXIF strings
+  containing `</script>` cannot break out of the data block; a
+  `<meta http-equiv="Content-Security-Policy">` deny-all-external
+  tag enforces (not just intends) "no network access". A fixture
+  with `</script>` planted in LensModel covers this in tests.
+- Residual privacy surface, accepted: the dashboard embeds relative
+  paths, folder names, and timestamps. No GPS, serials, absolute
+  paths, or image content.
+
 ### Charts (hand-rolled SVG, vanilla JS)
 
-Charts are rendered client-side from the embedded data so all slicing
-is instant. No chart library initially; histograms and bar charts are
-simple SVG. Fallback plan if hand-rolling proves painful: vendor one
-small chart library (uPlot-class) inline — a build-time decision that
-does not change this spec's interfaces.
+Charts render client-side from the embedded data so slicing is
+instant. No chart library initially; histograms and bar charts are
+simple SVG. Fallback if hand-rolling proves painful: vendor one
+small chart library (uPlot-class) inline — a build-time decision
+that doesn't change this spec's interfaces.
 
 1. **Money plot — per-lens focal length small multiples.** One
    histogram per lens, ordered by shot count, shared log-scaled x
-   axis with bin edges at classic focal lengths
-   (e.g. 10,14,18,24,35,50,70,85,105,135,200,300,400+). Uses actual
-   `focal_length`; a global toggle switches to `focal_length_35` for
-   cross-format comparison.
+   axis. Fixed bin edges (mm): `<10, 10, 14, 18, 24, 35, 50, 70,
+   85, 105, 135, 200, 300, 400+` — closed underflow bucket below
+   10, open-ended top bucket. Uses actual `focal_length`.
+   (`focal_length_35` is captured in the artifact but has no v1 UI;
+   a cross-format toggle can be added later if the rendered data
+   shows it's wanted.)
 2. Shots per camera (bar).
 3. Shots per lens (bar).
 4. Shots over time (per-month histogram).
@@ -166,26 +256,40 @@ Client-side, combinable, applied to every chart:
 
 - Top folder (multi-select)
 - Camera (multi-select)
-- Lens (multi-select)
-- Year range
-- Include-derivatives toggle (default off)
+- Lens (multi-select — shares the multi-select widget with the
+  other two, so ~free)
+- Year range (two plain `<select>` dropdowns: min year, max year)
 
 Each chart shows the filtered count against the unfiltered total.
+Derivative shots are always excluded (footnote shows how many).
 
 ## Testing
 
-- Fixture tree generated by a test helper: small real image files
-  with EXIF planted via exiftool, covering: RAW+JPEG pairs, JPEG-only
+- **Path-logic tests use empty `touch`ed files** — discovery,
+  extension filtering, dedup grouping, derivative detection,
+  top_folder derivation need no EXIF. The RAW-metadata-is-canonical
+  rule is unit-tested on merged dicts.
+- **Extraction tests use tiny real JPEG/TIFF fixtures** with tags
+  planted via exiftool. No real RAW files are checked in or
+  fabricated (exiftool can't create RAWs from scratch).
+- **The fixture helper is the only write-capable exiftool code in
+  the project and is confined:** it creates its own fresh directory
+  via `mkdtemp` and returns the path; it never accepts an existing
+  directory to populate; it asserts its target is under the system
+  tmp root; it is importable from tests only, never installed as a
+  console script.
+- Fixture tree covers: RAW+JPEG pairs (touched files), JPEG-only
   and RAW-only shots, `-Edit` derivatives, cross-folder basename
-  collisions, files with missing lens/focal tags, non-image files to
-  skip.
-- Unit tests: discovery/extension filtering, dedup grouping,
-  derivative detection, top_folder derivation, JSONL round-trip.
-- Integration test: scan fixture tree → render → assert the HTML
-  contains the embedded dataset and expected aggregate counts.
-- Render tests parse the embedded JSON back out of the HTML rather
-  than screenshotting.
-- The test suite never accesses anything outside the repo/tmp dirs.
+  collisions, missing lens/focal tags, non-image files to skip, a
+  filename with a non-UTF8 byte, and `</script>` in LensModel.
+- Unit tests additionally assert: exact exiftool argv + argfile
+  contents (no write flags, absolute paths), JSONL row key set,
+  JSONL round-trip.
+- Integration test: scan fixture tree → render → parse the embedded
+  JSON back out of the HTML and assert expected aggregate counts
+  (no screenshotting).
+- The test suite never accesses anything outside the repo and
+  system tmp dirs.
 
 ## Non-goals (YAGNI)
 
@@ -195,4 +299,7 @@ Each chart shows the filtered count against the unfiltered total.
 - Thumbnails or image display in the dashboard (metadata only — also
   keeps the artifact free of actual photo content).
 - Any database. JSONL is the artifact.
+- Lens-name normalization/aliasing.
+- Derivative include-toggle, `focal_length_35` UI, custom slider
+  widgets.
 - Watching/syncing; the tool runs on demand only.
