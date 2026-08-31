@@ -44,8 +44,11 @@ def parse_datetime(value) -> str | None:
 
 
 def top_folder(path: Path, scan_root: Path) -> str:
-    rel = path.relative_to(scan_root)
-    return scan_root.name if len(rel.parts) == 1 else rel.parts[0]
+    # Each scan root is the highest-level organizational folder selected by
+    # the user.  Always use its name, even when the photo lives in nested
+    # folders beneath it.
+    path.relative_to(scan_root)  # validate the relationship for callers
+    return scan_root.name
 
 
 def _canonical(files: list[FoundFile]) -> FoundFile:

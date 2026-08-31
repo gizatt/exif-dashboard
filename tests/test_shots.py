@@ -76,8 +76,8 @@ def test_datetime_prefix_parsing():
 
 
 def test_top_folder_rules():
-    assert top_folder(ROOT / "birds/x/y.jpg", ROOT) == "birds"
-    # file directly in the scan root: use the root's own name (spec, Derived fields)
+    # Nested folders do not replace the selected organizational root.
+    assert top_folder(ROOT / "birds/x/y.jpg", ROOT) == ROOT.name
     assert top_folder(ROOT / "y.jpg", ROOT) == ROOT.name
 
 

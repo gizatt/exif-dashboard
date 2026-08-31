@@ -9,6 +9,17 @@ const N_DERIV = PAYLOAD.shots.length - ALL.length;
 const BIN_EDGES = [0, 10, 14, 18, 24, 35, 50, 70, 85, 105, 135, 200, 300, 400, Infinity];
 const BIN_LABELS = ["<10", "10", "14", "18", "24", "35", "50", "70", "85", "105", "135", "200", "300", "400+"];
 
+// Apertures are bucketed around conventional full-stop values. Boundaries
+// are geometric midpoints, which puts intermediate values (f/3.2, f/4.5,
+// etc.) with their nearest full stop.
+const APERTURE_STOPS = [1, 1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22, 32];
+const APERTURE_EDGES = [0];
+for (let i = 0; i < APERTURE_STOPS.length - 1; i++) {
+  APERTURE_EDGES.push(Math.sqrt(APERTURE_STOPS[i] * APERTURE_STOPS[i + 1]));
+}
+APERTURE_EDGES.push(Infinity);
+const APERTURE_LABELS = APERTURE_STOPS.map(n => `f/${n}`);
+
 const UNKNOWN = "Unknown";
 const val = (s, k) => (s[k] == null ? UNKNOWN : String(s[k]));
 const year = s => (s.datetime ? +s.datetime.slice(0, 4) : null);
@@ -150,43 +161,54 @@ function hBarChart(container, title, keyFn, rows) {
   container.appendChild(card);
 }
 
-// Money plot: per-lens focal-length small multiples on the fixed bins.
-function moneyPlot(container, rows) {
-  const card = document.createElement("div");
-  card.className = "chart-card";
-  card.innerHTML = "<h2>Focal length by lens</h2>";
-  const grid = document.createElement("div");
-  grid.className = "facet-grid";
+function binIndex(value, edges) {
+  if (value == null) return -1;
+  for (let i = 0; i < edges.length - 1; i++) {
+    if (value >= edges[i] && value < edges[i + 1]) return i;
+  }
+  return -1;
+}
+
+function rowsByLens(rows) {
   const byLens = new Map();
   for (const s of rows) {
     const k = val(s, "lens");
     if (!byLens.has(k)) byLens.set(k, []);
     byLens.get(k).push(s);
   }
+  return byLens;
+}
+
+// Per-lens small-multiple histogram for a numeric shot field.
+function lensHistogram(container, rows, config) {
+  const card = document.createElement("div");
+  card.className = "chart-card";
+  card.innerHTML = `<h2>${config.title}</h2>`;
+  const grid = document.createElement("div");
+  grid.className = "facet-grid";
+  const byLens = rowsByLens(rows);
   const lenses = [...byLens.keys()].sort((a, b) => byLens.get(b).length - byLens.get(a).length);
   const W = 240, H = 110, padB = 18, padT = 6;
   for (const lens of lenses) {
     const shots = byLens.get(lens);
-    const bins = new Array(BIN_LABELS.length).fill(0);
+    const bins = new Array(config.labels.length).fill(0);
     let unknown = 0;
     for (const s of shots) {
-      const f = s.focal_length;
-      if (f == null) { unknown++; continue; }
-      for (let i = 0; i < BIN_LABELS.length; i++) {
-        if (f >= BIN_EDGES[i] && f < BIN_EDGES[i + 1]) { bins[i]++; break; }
-      }
+      const i = binIndex(s[config.key], config.edges);
+      if (i < 0) unknown++;
+      else bins[i]++;
     }
     const facet = document.createElement("div");
     const h3 = document.createElement("h3");
     h3.textContent = lens;
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent = `${fmt(shots.length)} shots` + (unknown ? ` · ${fmt(unknown)} unknown fl` : "");
+    sub.textContent = `${fmt(shots.length)} shots` + (unknown ? ` · ${fmt(unknown)} unknown ${config.unknownLabel}` : "");
     facet.appendChild(h3);
     facet.appendChild(sub);
     const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
     const max = Math.max(...bins, 1);
-    const slot = W / BIN_LABELS.length, barW = Math.min(24, slot - 2);  // 2px surface gap
+    const slot = W / config.labels.length, barW = Math.min(24, slot - 2);  // 2px surface gap
     const baseY = H - padB;
     svg.appendChild(el("line", { x1: 0, y1: baseY, x2: W, y2: baseY, stroke: "var(--baseline)", "stroke-width": 1 }));
     bins.forEach((n, i) => {
@@ -194,14 +216,91 @@ function moneyPlot(container, rows) {
       if (n > 0) {
         const h = Math.max(2, Math.round((n / max) * (baseY - padT)));
         const p = el("path", { d: barPathV(x, baseY - h, barW, h, baseY), fill: "var(--series-1)" });
-        hover(p, () => `${lens} @ ${BIN_LABELS[i]}mm: ${fmt(n)} shots`);
+        hover(p, () => `${lens} @ ${config.tooltipLabel(config.labels[i])}: ${fmt(n)} shots`);
         svg.appendChild(p);
       }
-      if (i % 2 === 0 || BIN_LABELS.length <= 8) {
+      if (i % config.labelEvery === 0 || config.labels.length <= 8) {
         const t = el("text", { x: x + barW / 2, y: H - 5, "text-anchor": "middle" });
-        t.textContent = BIN_LABELS[i];
+        t.textContent = config.labels[i];
         svg.appendChild(t);
       }
+    });
+    facet.appendChild(svg);
+    grid.appendChild(facet);
+  }
+  card.appendChild(grid);
+  container.appendChild(card);
+}
+
+function focalLengthPlot(container, rows) {
+  lensHistogram(container, rows, {
+    title: "Focal length by lens", key: "focal_length", edges: BIN_EDGES,
+    labels: BIN_LABELS, unknownLabel: "fl", labelEvery: 2,
+    tooltipLabel: label => `${label}mm`,
+  });
+}
+
+function aperturePlot(container, rows) {
+  lensHistogram(container, rows, {
+    title: "Aperture by lens", key: "aperture", edges: APERTURE_EDGES,
+    labels: APERTURE_LABELS, unknownLabel: "aperture", labelEvery: 2,
+    tooltipLabel: label => label,
+  });
+}
+
+// Per-lens joint distribution of focal length (x) and aperture (y).
+function exposureHeatmap(container, rows) {
+  const card = document.createElement("div");
+  card.className = "chart-card";
+  card.innerHTML = "<h2>Focal length × aperture by lens</h2>";
+  const grid = document.createElement("div");
+  grid.className = "facet-grid heatmap-grid";
+  const byLens = rowsByLens(rows);
+  const lenses = [...byLens.keys()].sort((a, b) => byLens.get(b).length - byLens.get(a).length);
+  const cell = 15, left = 34, top = 4, bottom = 34;
+  const W = left + BIN_LABELS.length * cell;
+  const H = top + APERTURE_LABELS.length * cell + bottom;
+  for (const lens of lenses) {
+    const shots = byLens.get(lens);
+    const counts = Array.from({ length: APERTURE_LABELS.length }, () => new Array(BIN_LABELS.length).fill(0));
+    let known = 0;
+    for (const s of shots) {
+      const x = binIndex(s.focal_length, BIN_EDGES);
+      const y = binIndex(s.aperture, APERTURE_EDGES);
+      if (x >= 0 && y >= 0) { counts[y][x]++; known++; }
+    }
+    const facet = document.createElement("div");
+    const h3 = document.createElement("h3");
+    h3.textContent = lens;
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = `${fmt(known)} of ${fmt(shots.length)} shots with both values`;
+    facet.appendChild(h3);
+    facet.appendChild(sub);
+    const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+    const max = Math.max(...counts.flat(), 1);
+    counts.forEach((row, y) => row.forEach((n, x) => {
+      const rect = el("rect", {
+        x: left + x * cell, y: top + y * cell, width: cell - 1, height: cell - 1,
+        fill: n ? "var(--series-1)" : "var(--grid)",
+        "fill-opacity": n ? (0.18 + 0.82 * Math.sqrt(n / max)).toFixed(2) : 0.35,
+      });
+      hover(rect, () => `${lens} · ${BIN_LABELS[x]}mm · ${APERTURE_LABELS[y]}: ${fmt(n)} shots`);
+      svg.appendChild(rect);
+    }));
+    APERTURE_LABELS.forEach((label, y) => {
+      if (y % 2) return;
+      const t = el("text", { x: left - 4, y: top + y * cell + cell - 4, "text-anchor": "end" });
+      t.textContent = label;
+      svg.appendChild(t);
+    });
+    BIN_LABELS.forEach((label, x) => {
+      if (x % 2) return;
+      const cx = left + x * cell + cell / 2;
+      const t = el("text", { x: cx, y: top + APERTURE_LABELS.length * cell + 5,
+        transform: `rotate(55 ${cx} ${top + APERTURE_LABELS.length * cell + 5})`, "text-anchor": "start" });
+      t.textContent = label;
+      svg.appendChild(t);
     });
     facet.appendChild(svg);
     grid.appendChild(facet);
@@ -270,7 +369,9 @@ function renderAll() {
     '<span><span class="swatch" style="background:var(--series-1)"></span>selected</span>' +
     '<span><span class="swatch" style="background:var(--track)"></span>all shots</span>';
   charts.appendChild(legend);
-  moneyPlot(charts, rows);
+  focalLengthPlot(charts, rows);
+  aperturePlot(charts, rows);
+  exposureHeatmap(charts, rows);
   hBarChart(charts, "Shots per lens", s => val(s, "lens"), rows);
   hBarChart(charts, "Shots per camera", s => val(s, "camera_model"), rows);
   hBarChart(charts, "Shots per folder", s => val(s, "top_folder"), rows);

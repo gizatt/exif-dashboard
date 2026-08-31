@@ -73,6 +73,7 @@ h1 { font-size: 20px; margin-bottom: 2px; }
 .chart-card h3 { font-size: 12px; font-weight: 600; margin: 4px 0 2px; }
 .chart-card .sub { font-size: 11px; color: var(--muted); }
 .facet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.heatmap-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 svg { display: block; }
 svg text { font: 11px system-ui, -apple-system, "Segoe UI", sans-serif;
   fill: var(--muted); font-variant-numeric: tabular-nums; }

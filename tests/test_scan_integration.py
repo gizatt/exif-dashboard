@@ -33,12 +33,13 @@ def test_pair_merged_with_raw_canonical_but_tagless(scanned):
     pair = next(r for r in rows if r["extensions"] == ["JPG", "NEF"])
     # nef is canonical; the touched nef has no readable tags -> Unknowns
     assert pair["camera_model"] is None
-    assert pair["top_folder"] == "trip_2019"
+    assert pair["top_folder"] == "photos"
 
 
 def test_real_tags_extracted(scanned):
     _, rows = scanned
-    bird = next(r for r in rows if r["top_folder"] == "birds")
+    bird = next(r for r in rows if r["path"] == "birds/DSC_0001.jpg")
+    assert bird["top_folder"] == "photos"
     assert bird["camera_model"] == "CamB"
     assert bird["focal_length"] == 400.0
     assert bird["lens"] is None

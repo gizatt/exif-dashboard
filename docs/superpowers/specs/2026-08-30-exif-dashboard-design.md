@@ -192,12 +192,11 @@ buckets downstream — rows are never dropped for missing metadata.
 
 ### Derived fields
 
-- `top_folder`: the first path component of the file relative to its
-  scan root (the user's organizational folder name). If the file
-  sits directly in the scan root — i.e. the user listed
-  organizational folders themselves in dirs.txt — the basename of
-  the scan root is used instead, so both listing styles yield
-  sensible folder names.
+- `top_folder`: the basename of the scan root (the user's highest-level
+  non-drive organizational folder). Nested directories beneath that root do
+  not create separate groups. Render recomputes this field from `scan_root`
+  and the relative `path`, so existing scan artifacts adopt this rule without
+  re-reading image metadata.
 
 ### Output
 

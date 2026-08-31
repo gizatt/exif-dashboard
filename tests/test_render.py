@@ -42,6 +42,21 @@ def test_render_round_trip(tmp_path):
     assert payload["shots"][0]["focal_length"] == 35.0
 
 
+def test_render_updates_legacy_nested_folder_group_without_rescan(tmp_path):
+    rows = sample_rows()
+    rows[0]["scan_root"] = "/mnt/z/2024 Acadia"
+    rows[0]["path"] = "day-1/selects/DSC_1.jpg"
+    rows[0]["top_folder"] = "day-1"
+    art = tmp_path / "p.jsonl"
+    write_artifact(rows, {"scanned_at": "t", "tool_version": "v"}, art)
+    out = tmp_path / "dash.html"
+
+    render_dashboard(art, out)
+
+    shot = extract_payload(out.read_text(encoding="utf-8"))["shots"][0]
+    assert shot["top_folder"] == "2024 Acadia"
+
+
 def test_html_is_self_contained_with_csp(tmp_path):
     art = tmp_path / "p.jsonl"
     write_artifact(sample_rows(), {"scanned_at": "t", "tool_version": "v"}, art)
@@ -99,3 +114,7 @@ def test_dashboard_assets_are_nonempty_and_wired(tmp_path):
     assert "prefers-color-scheme: dark" in html
     # money-plot binning constants present
     assert "BIN_EDGES" in html
+    assert "Aperture by lens" in html
+    assert "Focal length × aperture by lens" in html
+    assert "APERTURE_EDGES" in html
+    assert "with both values" in html

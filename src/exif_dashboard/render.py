@@ -7,6 +7,7 @@ from pathlib import Path
 
 from exif_dashboard.artifact import atomic_output, read_artifact
 from exif_dashboard.cli import ToolError
+from exif_dashboard.shots import top_folder
 
 
 class RenderError(ToolError):
@@ -28,7 +29,14 @@ def render_dashboard(artifact: Path, output: Path) -> None:
     # scan_root is an absolute local filesystem path and must never reach the
     # shareable dashboard HTML (spec: Render subcommand — no absolute paths
     # embedded). `path` is already stored relative to scan_root, so it stays.
-    payload_rows = [{k: v for k, v in row.items() if k != "scan_root"} for row in rows]
+    payload_rows = []
+    for row in rows:
+        payload_row = {k: v for k, v in row.items() if k != "scan_root"}
+        # Recompute this at render time so existing artifacts immediately get
+        # the current grouping rule without an expensive EXIF rescan.
+        scan_root = Path(row["scan_root"])
+        payload_row["top_folder"] = top_folder(scan_root / row["path"], scan_root)
+        payload_rows.append(payload_row)
     static = resource_files("exif_dashboard") / "static"
     html = (static / "template.html").read_text(encoding="utf-8")
     html = html.replace("/*__CSS__*/", (static / "dashboard.css").read_text(encoding="utf-8"))
