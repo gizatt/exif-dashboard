@@ -26,7 +26,11 @@ touches.
    anything inside the scanned directories. All output goes to the
    user-specified output path, which is refused if it resolves to a
    location inside any scanned root. (Mount-level atime updates from
-   reading are unavoidable and not a violation.)
+   reading are unavoidable and not a violation.) Recommended
+   operational practice, documented in the README: mount the network
+   drive read-only in WSL (`sudo mount -t drvfs Z: /mnt/z -o ro`), so
+   read-only is kernel-enforced defense in depth, not just
+   code-enforced.
 4. **The dashboard is a single self-contained HTML file.** No server,
    no CDN, no network access; it opens from disk and works forever.
 
