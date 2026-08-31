@@ -5,6 +5,8 @@ never land inside a scanned root.
 """
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from exif_dashboard.cli import ToolError
@@ -47,3 +49,52 @@ def validate_output_path(output: Path, roots: list[Path], input_file: Path) -> N
     for r in roots:
         if out.is_relative_to(r):
             raise DiscoveryError(f"output path {out} is inside scan root {r}")
+
+
+RAW_EXTS = ("nef", "cr2", "cr3", "arw", "raf", "dng", "orf", "rw2")
+IMG_EXTS = ("jpg", "jpeg", "heic", "heif", "tif", "tiff", "png")
+IMAGE_EXTS = frozenset(RAW_EXTS + IMG_EXTS)
+
+
+@dataclass
+class FoundFile:
+    path: Path       # absolute
+    scan_root: Path  # resolved root that contained it
+
+
+@dataclass
+class DiscoveryResult:
+    files: list[FoundFile] = field(default_factory=list)
+    skipped: int = 0
+    unsafe_names: list[str] = field(default_factory=list)
+
+
+def _is_safe_name(path_str: str) -> bool:
+    # Spec, argfile hardening: newlines could inject exiftool options;
+    # non-UTF8 surrogates can't be written to the UTF-8 argfile/JSONL.
+    if "\n" in path_str or "\r" in path_str:
+        return False
+    try:
+        path_str.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def discover_files(roots: list[Path]) -> DiscoveryResult:
+    result = DiscoveryResult()
+    for root in roots:
+        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+            for name in sorted(filenames):
+                full = Path(dirpath) / name
+                if name.startswith(".") or full.suffix.lower().lstrip(".") not in IMAGE_EXTS:
+                    result.skipped += 1
+                    continue
+                if full.is_symlink() or not full.is_file():
+                    continue  # symlinks and other non-regular files: reads must not escape roots
+                if not _is_safe_name(str(full)):
+                    result.unsafe_names.append(repr(str(full)))
+                    continue
+                result.files.append(FoundFile(path=full, scan_root=root))
+    return result
