@@ -61,3 +61,17 @@ def test_render_refuses_output_equals_input(tmp_path):
     write_artifact([], {"scanned_at": "t", "tool_version": "v"}, art)
     with pytest.raises(RenderError, match="equals"):
         render_dashboard(art, art)
+
+
+def test_dashboard_assets_are_nonempty_and_wired(tmp_path):
+    art = tmp_path / "p.jsonl"
+    write_artifact(sample_rows(), {"scanned_at": "t", "tool_version": "v"}, art)
+    out = tmp_path / "dash.html"
+    render_dashboard(art, out)
+    html = out.read_text(encoding="utf-8")
+    # JS actually shipped and reads the payload; CSS defines the theme tokens
+    assert 'getElementById("payload")' in html
+    assert "--series-1" in html
+    assert "prefers-color-scheme: dark" in html
+    # money-plot binning constants present
+    assert "BIN_EDGES" in html
