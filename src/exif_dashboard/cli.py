@@ -82,4 +82,8 @@ def cmd_scan(dirs_file: Path, output: Path) -> int:
 
 
 def cmd_render(artifact: Path, output: Path) -> int:
-    raise NotImplementedError
+    from exif_dashboard.render import render_dashboard
+
+    render_dashboard(artifact, output)
+    print(f"wrote {output}")
+    return 0

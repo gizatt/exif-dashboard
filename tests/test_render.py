@@ -1,0 +1,63 @@
+import json
+import re
+
+import pytest
+from exif_dashboard.artifact import write_artifact
+from exif_dashboard.render import RenderError, embed_json, render_dashboard
+
+
+def extract_payload(html: str) -> dict:
+    m = re.search(
+        r'<script id="payload" type="application/json">(.*?)</script>', html, re.S
+    )
+    assert m, "payload script block missing"
+    return json.loads(m.group(1))
+
+
+def sample_rows():
+    return [{
+        "path": "trip/DSC_1.jpg", "scan_root": "/r", "camera_make": "Nikon",
+        "camera_model": "Z 6", "lens": "Evil</script><b>lens", "focal_length": 35.0,
+        "focal_length_35": 52.0, "aperture": 1.8, "shutter": "1/250", "iso": 400,
+        "datetime": "2019:06:12 10:00:00", "extensions": ["JPG"],
+        "is_derivative": False, "top_folder": "trip",
+    }]
+
+
+def test_embed_json_escapes_close_tags():
+    out = embed_json({"lens": "a</script>b"})
+    assert "</script>" not in out
+    assert json.loads(out.replace("<\\/", "</")) == {"lens": "a</script>b"}
+
+
+def test_render_round_trip(tmp_path):
+    art = tmp_path / "p.jsonl"
+    write_artifact(sample_rows(), {"scanned_at": "t", "tool_version": "v"}, art)
+    out = tmp_path / "dash.html"
+    render_dashboard(art, out)
+    html = out.read_text(encoding="utf-8")
+    payload = extract_payload(html)
+    assert payload["meta"]["tool_version"] == "v"
+    assert payload["shots"][0]["lens"] == "Evil</script><b>lens"
+    assert payload["shots"][0]["focal_length"] == 35.0
+
+
+def test_html_is_self_contained_with_csp(tmp_path):
+    art = tmp_path / "p.jsonl"
+    write_artifact(sample_rows(), {"scanned_at": "t", "tool_version": "v"}, art)
+    out = tmp_path / "dash.html"
+    render_dashboard(art, out)
+    html = out.read_text(encoding="utf-8")
+    assert "Content-Security-Policy" in html
+    assert "default-src 'none'" in html
+    # The SVG XML namespace is a required identifier, not a network ref.
+    stripped = html.replace("http-equiv", "").replace("http://www.w3.org/2000/svg", "")
+    for pattern in ("http://", "https://", "src=", "href="):
+        assert pattern not in stripped, f"external ref? {pattern}"
+
+
+def test_render_refuses_output_equals_input(tmp_path):
+    art = tmp_path / "p.jsonl"
+    write_artifact([], {"scanned_at": "t", "tool_version": "v"}, art)
+    with pytest.raises(RenderError, match="equals"):
+        render_dashboard(art, art)
