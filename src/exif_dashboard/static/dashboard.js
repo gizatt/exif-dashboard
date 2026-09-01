@@ -29,7 +29,7 @@ const fmt = n => n.toLocaleString("en-US");
 const uniq = key => [...new Set(ALL.map(s => val(s, key)))].sort();
 const years = [...new Set(ALL.map(year).filter(y => y !== null))].sort((a, b) => a - b);
 const state = { top_folder: new Set(), camera_model: new Set(), lens: new Set(),
-                yearMin: null, yearMax: null };
+                yearMin: null, yearMax: null, focalKey: "focal_length" };
 
 function filtered() {
   return ALL.filter(s => {
@@ -75,6 +75,20 @@ function yearSelect(labelText, stateKey, defaultLabel) {
   return label;
 }
 
+function focalLengthSelect() {
+  const label = document.createElement("label");
+  label.textContent = "Focal length";
+  const sel = document.createElement("select");
+  sel.appendChild(new Option("As reported", "focal_length"));
+  sel.appendChild(new Option("35mm equivalent", "focal_length_35"));
+  sel.addEventListener("change", () => {
+    state.focalKey = sel.value;
+    renderAll();
+  });
+  label.appendChild(sel);
+  return label;
+}
+
 function buildFilters() {
   const el = document.getElementById("filters");
   el.appendChild(multiSelect("Top folder", "top_folder"));
@@ -82,11 +96,13 @@ function buildFilters() {
   el.appendChild(multiSelect("Lens", "lens"));
   el.appendChild(yearSelect("From year", "yearMin", "first"));
   el.appendChild(yearSelect("To year", "yearMax", "last"));
+  el.appendChild(focalLengthSelect());
   const clear = document.createElement("button");
   clear.textContent = "Clear filters";
   clear.addEventListener("click", () => {
     for (const k of ["top_folder", "camera_model", "lens"]) state[k] = new Set();
     state.yearMin = state.yearMax = null;
+    state.focalKey = "focal_length";
     el.querySelectorAll("select").forEach(s => { s.selectedIndex = -1; if (!s.multiple) s.selectedIndex = 0; });
     renderAll();
   });
@@ -233,9 +249,11 @@ function lensHistogram(container, rows, config) {
 }
 
 function focalLengthPlot(container, rows) {
+  const equivalent = state.focalKey === "focal_length_35";
   lensHistogram(container, rows, {
-    title: "Focal length by lens", key: "focal_length", edges: BIN_EDGES,
-    labels: BIN_LABELS, unknownLabel: "fl", labelEvery: 2,
+    title: `Focal length by lens · ${equivalent ? "35mm equivalent" : "as reported"}`,
+    key: state.focalKey, edges: BIN_EDGES, labels: BIN_LABELS,
+    unknownLabel: equivalent ? "35mm equiv" : "fl", labelEvery: 2,
     tooltipLabel: label => `${label}mm`,
   });
 }
@@ -250,9 +268,10 @@ function aperturePlot(container, rows) {
 
 // Per-lens joint distribution of focal length (x) and aperture (y).
 function exposureHeatmap(container, rows) {
+  const equivalent = state.focalKey === "focal_length_35";
   const card = document.createElement("div");
   card.className = "chart-card";
-  card.innerHTML = "<h2>Focal length × aperture by lens</h2>";
+  card.innerHTML = `<h2>Focal length × aperture by lens · ${equivalent ? "35mm equivalent" : "as reported"}</h2>`;
   const grid = document.createElement("div");
   grid.className = "facet-grid heatmap-grid";
   const byLens = rowsByLens(rows);
@@ -265,7 +284,7 @@ function exposureHeatmap(container, rows) {
     const counts = Array.from({ length: APERTURE_LABELS.length }, () => new Array(BIN_LABELS.length).fill(0));
     let known = 0;
     for (const s of shots) {
-      const x = binIndex(s.focal_length, BIN_EDGES);
+      const x = binIndex(s[state.focalKey], BIN_EDGES);
       const y = binIndex(s.aperture, APERTURE_EDGES);
       if (x >= 0 && y >= 0) { counts[y][x]++; known++; }
     }
@@ -285,7 +304,8 @@ function exposureHeatmap(container, rows) {
         fill: n ? "var(--series-1)" : "var(--grid)",
         "fill-opacity": n ? (0.18 + 0.82 * Math.sqrt(n / max)).toFixed(2) : 0.35,
       });
-      hover(rect, () => `${lens} · ${BIN_LABELS[x]}mm · ${APERTURE_LABELS[y]}: ${fmt(n)} shots`);
+      const focalKind = equivalent ? "35mm equiv" : "reported";
+      hover(rect, () => `${lens} · ${BIN_LABELS[x]}mm ${focalKind} · ${APERTURE_LABELS[y]}: ${fmt(n)} shots`);
       svg.appendChild(rect);
     }));
     APERTURE_LABELS.forEach((label, y) => {

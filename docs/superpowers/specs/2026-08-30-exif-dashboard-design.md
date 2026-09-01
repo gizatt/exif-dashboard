@@ -54,7 +54,9 @@ The JSONL artifact is the sole interface between the halves.
 `exiftool` (Perl, `apt install libimage-exiftool-perl`) is the one
 external binary, chosen for its coverage of every RAW flavor. The
 scan command checks for it at startup and exits with an install hint
-if absent. The Python package itself uses stdlib only.
+if absent. The Python package uses the stdlib plus `tqdm` (progress
+bars during scan; imported only by the CLI layer, so the library
+modules stay stdlib-clean).
 
 ## Scan subcommand
 

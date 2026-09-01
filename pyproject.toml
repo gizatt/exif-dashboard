@@ -7,7 +7,9 @@ authors = [
     { name = "Greg Izatt", email = "gregory.izatt@gmail.com" }
 ]
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "tqdm>=4.70.0",
+]
 
 [project.scripts]
 exif-dashboard = "exif_dashboard:main"

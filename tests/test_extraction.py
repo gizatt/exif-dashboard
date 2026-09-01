@@ -63,11 +63,17 @@ def test_extract_chunks_and_collects_errors(monkeypatch, tmp_path):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     paths = [Path(f"/p/img{i}.jpg") for i in range(5)] + [Path("/p/bad.jpg")]
-    meta, errors = extract_metadata(paths, chunk_size=4)
+    progress_calls = []
+    meta, errors = extract_metadata(
+        paths, chunk_size=4,
+        progress=lambda done, total, errs: progress_calls.append((done, total, errs)),
+    )
     assert calls == [4, 2]
     assert len(meta) == 5
     assert meta["/p/img0.jpg"]["Model"] == "CamX"
     assert errors == ["/p/bad.jpg"]
+    # progress reports (done, total, errors-so-far) after each chunk
+    assert progress_calls == [(4, 6, 0), (6, 6, 1)]
 
 
 def test_timeout_raises_stall(monkeypatch):

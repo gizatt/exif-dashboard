@@ -126,3 +126,19 @@ def test_unsafe_names_skipped_and_reported(tmp_path):
     result = discover_files([root.resolve()])
     assert [f.path.name for f in result.files] == ["ok.jpg"]
     assert len(result.unsafe_names) == 2
+
+
+def test_discovery_progress_callback(tmp_path):
+    root = make_tree(tmp_path)
+    calls = []
+    discover_files(
+        [root.resolve()],
+        on_progress=lambda dirpath, found, skipped, unsafe: calls.append(
+            (dirpath.name, found, skipped, unsafe)
+        ),
+    )
+    # one call per visited directory (root, 2019_trip, birds; .hiddendir pruned)
+    assert [c[0] for c in calls] == ["photos", "2019_trip", "birds"]
+    # counts are cumulative and final call reflects the full result
+    assert [c[1] for c in calls] == [1, 3, 4]
+    assert calls[-1][2] == 3 and calls[-1][3] == 0

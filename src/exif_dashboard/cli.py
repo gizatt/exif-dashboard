@@ -44,18 +44,39 @@ def cmd_scan(dirs_file: Path, output: Path) -> int:
     from exif_dashboard.extraction import check_exiftool, extract_metadata
     from exif_dashboard.shots import build_shots
 
+    from tqdm import tqdm
+
+    from exif_dashboard.shots import top_folder
+
     check_exiftool()
     roots = parse_dirs_file(dirs_file)
     validate_output_path(output, roots, dirs_file)
 
-    result = discover_files(roots)
-    print(f"discovered {len(result.files)} image files "
-          f"({result.skipped} skipped, {len(result.unsafe_names)} unsafe names)")
+    with tqdm(desc="discovering", unit=" files", leave=True) as bar:
+        def on_dir(dirpath: Path, found: int, skipped: int, unsafe: int) -> None:
+            shown = str(dirpath)
+            bar.set_description(f"discovering …{shown[-40:]}" if len(shown) > 40
+                                else f"discovering {shown}")
+            bar.update(found - bar.n)
+            postfix = {"skipped": skipped}
+            if unsafe:
+                postfix["unsafe"] = unsafe
+            bar.set_postfix(postfix)
 
-    def progress(done: int, total: int) -> None:
-        print(f"  extracted {done}/{total}")
+        result = discover_files(roots, on_progress=on_dir)
+        bar.set_description("discovering done")
 
-    meta_by_path, errors = extract_metadata([f.path for f in result.files], progress=progress)
+    files = [f.path for f in result.files]
+    with tqdm(total=len(files), desc="extracting EXIF", unit=" files", leave=True) as bar:
+        def on_chunk(done: int, total: int, errs: int) -> None:
+            bar.update(done - bar.n)
+            if errs:
+                bar.set_postfix(errors=errs)
+            if done < total:
+                nxt = result.files[done]
+                bar.set_description(f"extracting {top_folder(nxt.path, nxt.scan_root)}")
+
+        meta_by_path, errors = extract_metadata(files, progress=on_chunk)
     rows = build_shots(result.files, meta_by_path)
 
     header = {

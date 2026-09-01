@@ -118,3 +118,6 @@ def test_dashboard_assets_are_nonempty_and_wired(tmp_path):
     assert "Focal length × aperture by lens" in html
     assert "APERTURE_EDGES" in html
     assert "with both values" in html
+    assert 'new Option("As reported", "focal_length")' in html
+    assert 'new Option("35mm equivalent", "focal_length_35")' in html
+    assert "s[state.focalKey]" in html

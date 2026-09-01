@@ -83,7 +83,9 @@ def _is_safe_name(path_str: str) -> bool:
     return True
 
 
-def discover_files(roots: list[Path]) -> DiscoveryResult:
+def discover_files(roots: list[Path], on_progress=None) -> DiscoveryResult:
+    """on_progress, if given, is called once per visited directory as
+    on_progress(dirpath, files_found, skipped, unsafe) with cumulative counts."""
     result = DiscoveryResult()
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
@@ -99,4 +101,7 @@ def discover_files(roots: list[Path]) -> DiscoveryResult:
                     result.unsafe_names.append(repr(str(full)))
                     continue
                 result.files.append(FoundFile(path=full, scan_root=root))
+            if on_progress is not None:
+                on_progress(Path(dirpath), len(result.files), result.skipped,
+                            len(result.unsafe_names))
     return result

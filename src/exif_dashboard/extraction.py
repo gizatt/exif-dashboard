@@ -21,7 +21,7 @@ EXIFTOOL_TAG_ARGS = [
     "-ExposureTime", "-ISO", "-DateTimeOriginal", "-CreateDate",
 ]
 
-CHUNK_SIZE = 1000       # progress + stall-detection granularity, not memory
+CHUNK_SIZE = 250        # progress + stall-detection granularity, not memory
 CHUNK_TIMEOUT_S = 300.0
 
 
@@ -96,5 +96,5 @@ def extract_metadata(
         finally:
             argfile.unlink(missing_ok=True)
         if progress is not None:
-            progress(min(start + chunk_size, len(paths)), len(paths))
+            progress(min(start + chunk_size, len(paths)), len(paths), len(errors))
     return meta, errors
