@@ -1,8 +1,5 @@
-"""Confined fixture-tree builder.
-
-This is the ONLY write-capable exiftool code in the project (spec: Testing).
-It creates its own mkdtemp directory and never accepts an existing one.
-"""
+"""Confined fixture-tree builder: the only write-capable exiftool code in the
+project. It creates its own mkdtemp directory and never accepts an existing one."""
 from __future__ import annotations
 
 import shutil

@@ -1,7 +1,6 @@
 """Input validation and file discovery for the scan subcommand.
 
-Core constraint 3 (spec): the scan is read-only and its output must
-never land inside a scanned root.
+The scan is read-only and its output must never land inside a scanned root.
 """
 from __future__ import annotations
 
@@ -72,8 +71,8 @@ class DiscoveryResult:
 
 
 def _is_safe_name(path_str: str) -> bool:
-    # Spec, argfile hardening: newlines could inject exiftool options;
-    # non-UTF8 surrogates can't be written to the UTF-8 argfile/JSONL.
+    # Newlines could inject exiftool options; non-UTF8 surrogates
+    # can't be written to the UTF-8 argfile/JSONL.
     if "\n" in path_str or "\r" in path_str:
         return False
     try:
@@ -96,7 +95,7 @@ def discover_files(roots: list[Path], on_progress=None) -> DiscoveryResult:
                     result.skipped += 1
                     continue
                 if full.is_symlink() or not full.is_file():
-                    continue  # symlinks and other non-regular files: reads must not escape roots
+                    continue  # reads must not escape roots
                 if not _is_safe_name(str(full)):
                     result.unsafe_names.append(repr(str(full)))
                     continue

@@ -15,8 +15,8 @@ class RenderError(ToolError):
 
 
 def embed_json(data) -> str:
-    # '</' -> '<\/' so EXIF strings containing '</script>' cannot close the
-    # data block (spec: Render subcommand). Valid JSON either way.
+    # '</' -> '<\/' so an EXIF string containing '</script>' can't close the
+    # data block; valid JSON either way.
     return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
 
 
@@ -26,14 +26,12 @@ def render_dashboard(artifact: Path, output: Path) -> None:
     if not output.resolve().parent.is_dir():
         raise RenderError(f"output directory does not exist: {output.resolve().parent}")
     meta, rows = read_artifact(artifact)
-    # scan_root is an absolute local filesystem path and must never reach the
-    # shareable dashboard HTML (spec: Render subcommand — no absolute paths
-    # embedded). `path` is already stored relative to scan_root, so it stays.
+    # scan_root is an absolute local path and must never reach the shareable
+    # HTML; `path` is already relative to it.
     payload_rows = []
     for row in rows:
         payload_row = {k: v for k, v in row.items() if k != "scan_root"}
-        # Recompute this at render time so existing artifacts immediately get
-        # the current grouping rule without an expensive EXIF rescan.
+        # Recomputed so old artifacts pick up the current grouping rule without a rescan.
         scan_root = Path(row["scan_root"])
         payload_row["top_folder"] = top_folder(scan_root / row["path"], scan_root)
         payload_rows.append(payload_row)

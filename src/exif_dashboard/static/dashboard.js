@@ -1,17 +1,16 @@
 // src/exif_dashboard/static/dashboard.js
 "use strict";
 const PAYLOAD = JSON.parse(document.getElementById("payload").textContent);
-// Derivatives are always excluded from charts (spec); footnote shows the count.
+// Derivatives are always excluded from charts; footnote shows the count.
 const ALL = PAYLOAD.shots.filter(s => !s.is_derivative);
 const N_DERIV = PAYLOAD.shots.length - ALL.length;
 
-// Spec: fixed focal-length bin edges, closed underflow, open top.
+// Fixed focal-length bin edges: closed underflow, open top.
 const BIN_EDGES = [0, 10, 14, 18, 24, 35, 50, 70, 85, 105, 135, 200, 300, 400, Infinity];
 const BIN_LABELS = ["<10", "10", "14", "18", "24", "35", "50", "70", "85", "105", "135", "200", "300", "400+"];
 
-// Apertures are bucketed around conventional full-stop values. Boundaries
-// are geometric midpoints, which puts intermediate values (f/3.2, f/4.5,
-// etc.) with their nearest full stop.
+// Aperture buckets centered on full stops; geometric-midpoint boundaries
+// put intermediates (f/3.2, f/4.5, ...) with their nearest stop.
 const APERTURE_STOPS = [1, 1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22, 32];
 const APERTURE_EDGES = [0];
 for (let i = 0; i < APERTURE_STOPS.length - 1; i++) {
@@ -116,7 +115,7 @@ function el(name, attrs) {
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
   return e;
 }
-// Bar with 4px rounded data-end, square at the baseline (dataviz mark spec).
+// Bar with 4px rounded data-end, square at the baseline.
 function barPathH(x, y, w, h) {   // grows rightward
   const r = Math.min(4, w, h / 2);
   return `M${x},${y} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${h - 2 * r} a${r},${r} 0 0 1 -${r},${r} h${-(w - r)} z`;

@@ -1,4 +1,4 @@
-"""JSONL artifact read/write with atomic replacement (spec: Output)."""
+"""JSONL artifact read/write with atomic replacement."""
 from __future__ import annotations
 
 import json
@@ -15,11 +15,8 @@ class ArtifactError(ToolError):
 
 @contextmanager
 def atomic_output(output: Path):
-    """A failed run never truncates a previous output file.
-
-    Temp file sits in the destination directory (same filesystem, so the
-    rename is atomic) with a recognizable name, and is deleted on failure.
-    """
+    """A failed run never truncates a previous output file; the temp file
+    sits in the destination directory so the rename is atomic."""
     tmp = output.with_name(f"{output.name}.tmp.{os.getpid()}")
     try:
         with open(tmp, "w", encoding="utf-8") as f:

@@ -1,8 +1,7 @@
-"""Batch exiftool invocation. Read-only by construction (spec: argfile hardening).
+"""Batch exiftool invocation, read-only by construction.
 
-Never add write-mode options here: no `=` assignments, -overwrite_original,
--delete_original, -restore_original, -tagsFromFile. test_extraction.py pins
-the exact argv and argfile format.
+Never add write-mode options here (`=` assignments, -overwrite_original,
+-tagsFromFile, etc.); test_extraction.py pins the exact argv and argfile format.
 """
 from __future__ import annotations
 
@@ -48,8 +47,7 @@ def write_argfile(paths: list[Path], argfile: Path) -> None:
     lines = []
     for p in paths:
         s = str(p)
-        # Belt-and-braces: discovery already filtered these, but a relative
-        # or newline-bearing path in an argfile can become an exiftool OPTION.
+        # A relative or newline-bearing path in an argfile can become an exiftool option.
         if not p.is_absolute():
             raise ValueError(f"argfile paths must be absolute: {s}")
         if "\n" in s or "\r" in s:
@@ -68,7 +66,7 @@ def extract_metadata(
     errors: list[str] = []
     for start in range(0, len(paths), chunk_size):
         chunk = paths[start : start + chunk_size]
-        # System temp dir, never a scan root or CWD (spec).
+        # Argfile lives in the system temp dir, never a scan root.
         fd = tempfile.NamedTemporaryFile("w", suffix=".args", delete=False)
         argfile = Path(fd.name)
         fd.close()
@@ -87,8 +85,7 @@ def extract_metadata(
             got = {row["SourceFile"]: row for row in rows}
             for p in chunk:
                 row = got.get(str(p))
-                # exiftool reports unreadable files as a row with an "Error"
-                # tag rather than omitting them; both are extraction errors.
+                # exiftool reports unreadable files as a row with an "Error" tag.
                 if row is None or "Error" in row:
                     errors.append(str(p))
                 else:

@@ -57,8 +57,7 @@ def test_meta_header(scanned):
 
 
 def test_scan_then_render_roundtrip(tmp_path):
-    # Spec Testing section: scan fixture tree -> render -> parse the embedded
-    # JSON back out of the HTML -> assert expected aggregate counts.
+    # Parse the embedded JSON back out of the HTML and assert aggregate counts.
     root = make_fixture_tree()
     dirs_file = tmp_path / "dirs.txt"
     dirs_file.write_text(f"{root}\n", encoding="utf-8")

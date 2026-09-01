@@ -1,9 +1,4 @@
-"""Dedup discovered files into shots and map exiftool tags to artifact rows.
-
-Spec rules implemented here: group by (directory, basename), RAW metadata
-canonical, derivative-by-suffix-only, verbatim lens strings with fixed tag
-priority, YYYY:MM datetime prefix validation, top_folder derivation.
-"""
+"""Dedup discovered files into shots and map exiftool tags to artifact rows."""
 from __future__ import annotations
 
 import re
@@ -12,10 +7,8 @@ from pathlib import Path
 from exif_dashboard.discovery import RAW_EXTS, FoundFile
 
 DERIVATIVE_RE = re.compile(r"(-Edit(-\d+)?|-HDR|-Pano| \(\d+\))$")
-# Fixed priority — never per-file opportunistic. LensID first: it is
-# exiftool's decoded MakerNotes composite and stays identical between a
-# camera original and a Lightroom export of the same shot, while
-# Lightroom writes a generic LensModel that would split the bucket.
+# LensID first: it stays identical between a camera original and its Lightroom
+# export, while Lightroom's generic LensModel would split the bucket.
 LENS_TAGS = ("LensID", "LensModel", "Lens")
 DATETIME_TAGS = ("DateTimeOriginal", "CreateDate")
 _DT_RE = re.compile(r"^(\d{4}):(\d{2})")
@@ -44,9 +37,7 @@ def parse_datetime(value) -> str | None:
 
 
 def top_folder(path: Path, scan_root: Path) -> str:
-    # Each scan root is the highest-level organizational folder selected by
-    # the user.  Always use its name, even when the photo lives in nested
-    # folders beneath it.
+    # Always the scan root's name, even for photos nested deeper.
     path.relative_to(scan_root)  # validate the relationship for callers
     return scan_root.name
 
@@ -71,7 +62,7 @@ def _pos_num(v) -> float | None:
         f = float(v)
     except (TypeError, ValueError):
         return None
-    return f if f > 0 else None  # 0mm manual lenses -> Unknown (spec)
+    return f if f > 0 else None  # 0mm manual lenses -> Unknown
 
 
 def build_shots(found: list[FoundFile], metadata: dict[str, dict]) -> list[dict]:
