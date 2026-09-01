@@ -1,39 +1,18 @@
 # EXIF Dashboard
 
-Analyze camera/lens/focal-length usage across a photo collection. The `scan` command extracts EXIF from your photos into a JSONL artifact; `render` produces a fully self-contained HTML dashboard with interactive filters and charts.
+Analyze camera/lens/focal-length usage across a photo collection: `scan` extracts EXIF into JSONL, `render` turns that into a self-contained interactive HTML dashboard.
 
-**[Live example](https://gizatt.github.io/exif-dashboard/example-dashboard.html)** — rendered from my own ~20k-shot catalog ([docs/example-dashboard.html](docs/example-dashboard.html)).
+**[Live example](https://gizatt.github.io/exif-dashboard/example-dashboard.html)** — my own ~20k-shot catalog.
 
-## Setup
+## Use
 
 ```bash
-sudo apt install libimage-exiftool-perl   # the one binary dependency
-# everything else is handled by uv automatically on first run
+sudo apt install libimage-exiftool-perl      # the only binary dependency; uv handles the rest
+echo /path/to/photos >> data/dirs.txt        # directories to scan, one per line
+uv run exif-dashboard scan data/dirs.txt -o data/photos.jsonl
+uv run exif-dashboard render data/photos.jsonl -o data/dashboard.html
 ```
 
-## Usage
+Open `data/dashboard.html` in a browser.
 
-1. Mount the photo drive read-only (kernel-enforced safety):
-   ```bash
-   sudo mount -t drvfs Z: /mnt/z -o ro
-   ```
-
-2. List the directories to scan, one per line, in `data/dirs.txt` (`#` comments allowed; gitignored).
-
-3. Scan (the only step that touches the drive; read-only, atomic output):
-   ```bash
-   uv run exif-dashboard scan data/dirs.txt -o data/photos.jsonl
-   ```
-
-4. Generate the dashboard (re-run freely; never touches the drive):
-   ```bash
-   uv run exif-dashboard render data/photos.jsonl -o data/dashboard.html
-   ```
-
-5. Open `data/dashboard.html` in a browser. It is fully self-contained.
-
-## Notes
-
-- **RAW+JPEG pairs:** Counted as one shot; metadata comes from the RAW file if available.
-- **Derivatives:** Files matching `-Edit`, `-HDR`, `-Pano`, or ` (N)` patterns are excluded from all charts; the count is shown in the footer.
-- **Lightroom ratings:** Out of scope by design.
+Scanning never writes to your photos — for kernel-enforced safety, mount the drive read-only (e.g. `sudo mount -t drvfs Z: /mnt/z -o ro` on WSL). RAW+JPEG pairs count as one shot, with metadata from the RAW; `-Edit`/`-HDR`/`-Pano`/`(N)` derivatives are excluded from charts.
