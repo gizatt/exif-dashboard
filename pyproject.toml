@@ -1,8 +1,10 @@
 [project]
 name = "exif-dashboard"
 version = "0.1.0"
-description = "Add your description here"
+description = "Scan a photo collection's EXIF into JSONL and render a self-contained HTML dashboard of camera/lens/focal-length usage"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Greg Izatt", email = "gregory.izatt@gmail.com" }
 ]
