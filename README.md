@@ -2,6 +2,8 @@
 
 Analyze camera/lens/focal-length usage across a photo collection. The `scan` command extracts EXIF from your photos into a JSONL artifact; `render` produces a fully self-contained HTML dashboard with interactive filters and charts.
 
+**[Live example](https://gizatt.github.io/exif-dashboard/example-dashboard.html)** — rendered from my own ~20k-shot catalog ([docs/example-dashboard.html](docs/example-dashboard.html)).
+
 ## Setup
 
 ```bash
