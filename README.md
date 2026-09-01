@@ -1,8 +1,14 @@
 # EXIF Dashboard
 
-Analyze camera/lens/focal-length usage across a photo collection: `scan` extracts EXIF into JSONL, `render` turns that into a self-contained interactive HTML dashboard.
+## What and why
 
-**[Live example](https://gizatt.github.io/exif-dashboard/example-dashboard.html)** — my own ~20k-shot catalog.
+I rely on zoom lenses quite a bit. I'm currently considering getting a new camera and lenses. This repo contains code to scrape my photo library and tell me what settings -- primarily aperture and focal length -- I tend to use.
+
+**[Live example](https://gizatt.github.io/exif-dashboard/example-dashboard.html)** — computed from 20k shots I took 2021-2026.
+
+## Deets
+
+Analyze camera/lens/focal-length usage across a photo collection: `scan` extracts EXIF into JSONL, `render` turns that into a self-contained interactive HTML dashboard.
 
 ## Use
 
